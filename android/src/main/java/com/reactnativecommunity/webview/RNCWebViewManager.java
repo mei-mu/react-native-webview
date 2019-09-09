@@ -1,16 +1,19 @@
 package com.reactnativecommunity.webview;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.support.annotation.RequiresApi;
+import android.support.v4.content.ContextCompat;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -22,6 +25,7 @@ import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -31,9 +35,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
-import com.facebook.react.views.scroll.ScrollEvent;
-import com.facebook.react.views.scroll.ScrollEventType;
-import com.facebook.react.views.scroll.OnScrollDispatchHelper;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactContext;
@@ -51,6 +52,9 @@ import com.facebook.react.uimanager.annotations.ReactProp;
 import com.facebook.react.uimanager.events.ContentSizeChangeEvent;
 import com.facebook.react.uimanager.events.Event;
 import com.facebook.react.uimanager.events.EventDispatcher;
+import com.facebook.react.views.scroll.OnScrollDispatchHelper;
+import com.facebook.react.views.scroll.ScrollEvent;
+import com.facebook.react.views.scroll.ScrollEventType;
 import com.reactnativecommunity.webview.events.TopLoadingErrorEvent;
 import com.reactnativecommunity.webview.events.TopLoadingFinishEvent;
 import com.reactnativecommunity.webview.events.TopLoadingProgressEvent;
@@ -65,6 +69,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -732,6 +737,41 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
         new TopLoadingProgressEvent(
           webView.getId(),
           event));
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    @Override
+    public void onPermissionRequest(final PermissionRequest request) {
+      String[] requestedResources = request.getResources();
+      ArrayList<String> permissions = new ArrayList<>();
+      ArrayList<String> grantedPermissions = new ArrayList<String>();
+      for (int i = 0; i < requestedResources.length; i++) {
+        if (requestedResources[i].equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+          permissions.add(Manifest.permission.RECORD_AUDIO);
+        } else if (requestedResources[i].equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+          permissions.add(Manifest.permission.CAMERA);
+        }
+        // TODO: RESOURCE_MIDI_SYSEX, RESOURCE_PROTECTED_MEDIA_ID.
+      }
+
+      for (int i = 0; i < permissions.size(); i++) {
+        if (ContextCompat.checkSelfPermission(mReactContext , permissions.get(i)) != PackageManager.PERMISSION_GRANTED) {
+          continue;
+        }
+        if (permissions.get(i).equals(Manifest.permission.RECORD_AUDIO)) {
+          grantedPermissions.add(PermissionRequest.RESOURCE_AUDIO_CAPTURE);
+        } else if (permissions.get(i).equals(Manifest.permission.CAMERA)) {
+          grantedPermissions.add(PermissionRequest.RESOURCE_VIDEO_CAPTURE);
+        }
+      }
+
+      if (grantedPermissions.isEmpty()) {
+        request.deny();
+      } else {
+        String[] grantedPermissionsArray = new String[grantedPermissions.size()];
+        grantedPermissionsArray = grantedPermissions.toArray(grantedPermissionsArray);
+        request.grant(grantedPermissionsArray);
+      }
     }
 
     @Override
