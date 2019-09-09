@@ -1,6 +1,7 @@
 package com.reactnativecommunity.webview;
 
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
@@ -12,6 +13,7 @@ import android.os.Environment;
 import android.os.Parcelable;
 import android.provider.MediaStore;
 import android.support.annotation.RequiresApi;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.util.Log;
@@ -20,6 +22,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.widget.Toast;
 
+import com.facebook.react.ReactActivity;
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -40,11 +43,13 @@ public class RNCWebViewModule extends ReactContextBaseJavaModule implements Acti
   public static final String MODULE_NAME = "RNCWebView";
   private static final int PICKER = 1;
   private static final int PICKER_LEGACY = 3;
+  private static final int REQUEST_CAMERA = 4;
   private static final int FILE_DOWNLOAD_PERMISSION_REQUEST = 1;
   final String DEFAULT_MIME_TYPES = "*/*";
   private ValueCallback<Uri> filePathCallbackLegacy;
   private ValueCallback<Uri[]> filePathCallback;
   private Uri outputFileUri;
+  private Intent chooserIntent;
   private DownloadManager.Request downloadRequest;
   private PermissionListener webviewFileDownloaderPermissionListener = new PermissionListener() {
     @Override
@@ -175,6 +180,35 @@ public class RNCWebViewModule extends ReactContextBaseJavaModule implements Acti
     }
   }
 
+  private PermissionListener listener = new PermissionListener() {
+    public boolean onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+      switch (requestCode) {
+        case REQUEST_CAMERA: {
+          if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            getCurrentActivity().startActivityForResult(chooserIntent, PICKER);
+            break;
+          }
+          else {
+            if(filePathCallback != null){
+              filePathCallback.onReceiveValue(null);
+            }
+            break;
+          }
+        }
+      }
+      return false;
+    }
+  };
+
+  private void requestPermissions() {
+    if (getCurrentActivity() instanceof ReactActivity) {
+      ((ReactActivity) getCurrentActivity()).requestPermissions(new String[]{ Manifest.permission.CAMERA}, REQUEST_CAMERA, listener);
+    }
+    else {
+      ((PermissionAwareActivity) getCurrentActivity()).requestPermissions(new String[]{ Manifest.permission.CAMERA}, REQUEST_CAMERA, listener);
+    }
+  }
+
   @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
   public boolean startPhotoPickerIntent(final ValueCallback<Uri[]> callback, final Intent intent, final String[] acceptTypes, final boolean allowMultiple) {
     filePathCallback = callback;
@@ -189,12 +223,19 @@ public class RNCWebViewModule extends ReactContextBaseJavaModule implements Acti
 
     Intent fileSelectionIntent = getFileChooserIntent(acceptTypes, allowMultiple);
 
-    Intent chooserIntent = new Intent(Intent.ACTION_CHOOSER);
+    chooserIntent = new Intent(Intent.ACTION_CHOOSER);
     chooserIntent.putExtra(Intent.EXTRA_INTENT, fileSelectionIntent);
     chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, extraIntents.toArray(new Parcelable[]{}));
+    chooserIntent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    chooserIntent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
     if (chooserIntent.resolveActivity(getCurrentActivity().getPackageManager()) != null) {
-      getCurrentActivity().startActivityForResult(chooserIntent, PICKER);
+      int checkCallPhonePermission = ContextCompat.checkSelfPermission(getReactApplicationContext(), Manifest.permission.CAMERA);
+      if (checkCallPhonePermission != PackageManager.PERMISSION_GRANTED){
+        requestPermissions();
+      }else {
+        getCurrentActivity().startActivityForResult(chooserIntent, PICKER);
+      }
     } else {
       Log.w("RNCWebViewModule", "there is no Activity to handle this Intent");
     }
