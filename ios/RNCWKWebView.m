@@ -790,12 +790,19 @@ static NSURLCredential* clientAuthenticationCredential;
           thenCall: (void (^)(NSString*)) callback
 {
   [self.webView evaluateJavaScript: js completionHandler: ^(id result, NSError *error) {
-    if (error == nil) {
-      if (callback != nil) {
-        callback([NSString stringWithFormat:@"%@", result]);
-      }
-    } else {
-      RCTLogError(@"Error evaluating injectedJavaScript: This is possibly due to an unsupported return type. Try adding true to the end of your injectedJavaScript string.");
+    //https://github.com/react-native-community/react-native-webview/pull/756/files
+    // if (error == nil) {
+    //   if (callback != nil) {
+    //     callback([NSString stringWithFormat:@"%@", result]);
+    //   }
+    // } else {
+    //   RCTLogError(@"Error evaluating injectedJavaScript: This is possibly due to an unsupported return type. Try adding true to the end of your injectedJavaScript string.");
+    // }
+    if (callback != nil) {
+      callback([NSString stringWithFormat:@"%@", result]);
+    }
+    if (error != nil) {
+      RCTLogWarn([NSString stringWithFormat:@"Error evaluating injectedJavaScript: This is possibly due to an unsupported return type. Try adding true to the end of your injectedJavaScript string. %@", error]);
     }
   }];
 }
